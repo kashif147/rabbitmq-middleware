@@ -119,4 +119,12 @@ export { EVENT_TYPES,
   EXCHANGES,
   QUEUE_PATTERNS,
   EVENT_SCHEMAS,
-  validateEventPayload, };
+  validateEventPayload };
+
+export default {
+  EVENT_TYPES,
+  EXCHANGES,
+  QUEUE_PATTERNS,
+  EVENT_SCHEMAS,
+  validateEventPayload,
+};
