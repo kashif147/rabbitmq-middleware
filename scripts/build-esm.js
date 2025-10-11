@@ -59,7 +59,7 @@ function convertToESM(content) {
       // For simple object exports, create both named and default exports
       const exportNames = exports.trim();
       // Remove trailing comma if present and add it in the right place
-      const cleanedNames = exportNames.replace(/,\s*$/, '');
+      const cleanedNames = exportNames.replace(/,\s*$/, "");
       return `export { ${cleanedNames} };\n\nexport default {\n  ${cleanedNames},\n};`;
     }
   );
