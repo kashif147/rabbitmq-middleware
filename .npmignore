@@ -1,0 +1,10 @@
+src/
+examples/
+scripts/
+*.log
+.env
+.env.*
+coverage/
+.nyc_output/
+node_modules/
+

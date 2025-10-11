@@ -1,0 +1,47 @@
+{
+  "name": "@projectShell/rabbitmq-middleware",
+  "version": "1.0.0",
+  "description": "Shared RabbitMQ middleware for microservices with support for both CommonJS and ESM",
+  "main": "dist/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "import": "./dist/esm/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "node scripts/build-cjs.js",
+    "build:esm": "node scripts/build-esm.js",
+    "prepublishOnly": "npm run build",
+    "test": "jest"
+  },
+  "keywords": [
+    "rabbitmq",
+    "amqp",
+    "messaging",
+    "microservices",
+    "event-driven"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "amqplib": "^0.10.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kashif147/rabbitmq-middleware.git"
+  }
+}
