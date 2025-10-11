@@ -49,9 +49,21 @@ async function shutdown() {
   await connectionManager.close();
 }
 
-export { init,
+const EVENT_TYPES = schemas.EVENT_TYPES;
+const EXCHANGES = schemas.EXCHANGES;
+const QUEUE_PATTERNS = schemas.QUEUE_PATTERNS;
+const EVENT_SCHEMAS = schemas.EVENT_SCHEMAS;
+const validateEventPayload = schemas.validateEventPayload;
+
+export {
+  init,
   shutdown,
   connectionManager,
   publisher,
   consumer,
-  ...schemas, };
+  EVENT_TYPES,
+  EXCHANGES,
+  QUEUE_PATTERNS,
+  EVENT_SCHEMAS,
+  validateEventPayload,
+};

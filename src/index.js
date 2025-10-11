@@ -55,5 +55,9 @@ module.exports = {
   connectionManager,
   publisher,
   consumer,
-  ...schemas,
+  EVENT_TYPES: schemas.EVENT_TYPES,
+  EXCHANGES: schemas.EXCHANGES,
+  QUEUE_PATTERNS: schemas.QUEUE_PATTERNS,
+  EVENT_SCHEMAS: schemas.EVENT_SCHEMAS,
+  validateEventPayload: schemas.validateEventPayload,
 };

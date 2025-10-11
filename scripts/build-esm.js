@@ -27,6 +27,30 @@ function convertToESM(content) {
   content = content.replace(
     /module\.exports\s*=\s*\{([^}]+)\};?/g,
     (match, exports) => {
+      // Check if exports contain property assignments like "EVENT_TYPES: schemas.EVENT_TYPES"
+      const hasPropertyAssignments = /\w+:\s*\w+\.\w+/.test(exports);
+      
+      if (hasPropertyAssignments) {
+        // Extract property assignments and create const declarations
+        const lines = exports.split(',').map(line => line.trim()).filter(Boolean);
+        const constDecls = lines
+          .filter(line => line.includes(':'))
+          .map(line => {
+            const [name, value] = line.split(':').map(s => s.trim());
+            return `const ${name} = ${value};`;
+          })
+          .join('\n');
+        
+        const exportNames = lines.map(line => {
+          if (line.includes(':')) {
+            return line.split(':')[0].trim();
+          }
+          return line;
+        }).join(',\n  ');
+        
+        return `${constDecls}\n\nexport {\n  ${exportNames},\n};`;
+      }
+      
       return `export { ${exports.trim()} };`;
     }
   );
