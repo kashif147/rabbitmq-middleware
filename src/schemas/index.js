@@ -24,6 +24,8 @@ const EVENT_TYPES = {
   APPLICATION_SUBMITTED: "application.submitted",
   APPLICATION_APPROVED: "application.approved",
   APPLICATION_REJECTED: "application.rejected",
+  APPLICATION_REVIEW_APPROVED: "applications.review.approved.v1",
+  APPLICATION_REVIEW_REJECTED: "applications.review.rejected.v1",
 
   // Portal events
   PORTAL_APPLICATION_CREATED: "portal.application.created",
@@ -34,6 +36,9 @@ const EVENT_TYPES = {
   PROFILE_CREATED: "profile.created",
   PROFILE_UPDATED: "profile.updated",
   PROFILE_DELETED: "profile.deleted",
+
+  // Membership events
+  MEMBER_CREATED_REQUESTED: "members.member.created.requested.v1",
 };
 
 // Exchange definitions
@@ -89,6 +94,24 @@ const EVENT_SCHEMAS = {
   [EVENT_TYPES.PAYMENT_COMPLETED]: {
     required: ["paymentId", "amount", "currency", "status"],
     optional: ["userId", "applicationId", "tenantId", "transactionId"],
+  },
+  [EVENT_TYPES.APPLICATION_REVIEW_APPROVED]: {
+    required: ["applicationId", "tenantId", "reviewerId"],
+    optional: [
+      "effectiveHash",
+      "submissionVersion",
+      "overlayVersion",
+      "profileId",
+      "effective",
+    ],
+  },
+  [EVENT_TYPES.APPLICATION_REVIEW_REJECTED]: {
+    required: ["applicationId", "tenantId", "reviewerId", "reason"],
+    optional: ["notes"],
+  },
+  [EVENT_TYPES.MEMBER_CREATED_REQUESTED]: {
+    required: ["applicationId", "tenantId"],
+    optional: ["effective", "profileId"],
   },
 };
 
