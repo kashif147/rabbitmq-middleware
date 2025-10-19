@@ -49,6 +49,7 @@ const EXCHANGES = {
   ACCOUNTS_EVENTS: "accounts.events",
   PORTAL_EVENTS: "portal.events",
   PROFILE_EVENTS: "profile.events",
+  MEMBERSHIP_EVENTS: "membership.events",
   DLX: "dlx",
 };
 
@@ -97,7 +98,13 @@ const EVENT_SCHEMAS = {
   },
   [EVENT_TYPES.APPLICATION_REVIEW_APPROVED]: {
     required: ["applicationId", "tenantId", "reviewerId"],
-    optional: ["effectiveHash", "submissionVersion", "overlayVersion", "profileId", "effective"],
+    optional: [
+      "effectiveHash",
+      "submissionVersion",
+      "overlayVersion",
+      "profileId",
+      "effective",
+    ],
   },
   [EVENT_TYPES.APPLICATION_REVIEW_REJECTED]: {
     required: ["applicationId", "tenantId", "reviewerId", "reason"],

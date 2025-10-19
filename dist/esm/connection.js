@@ -91,6 +91,7 @@ class ConnectionManager {
       { name: "accounts.events", type: "topic", options: { durable: true } },
       { name: "portal.events", type: "topic", options: { durable: true } },
       { name: "profile.events", type: "topic", options: { durable: true } },
+      { name: "membership.events", type: "topic", options: { durable: true } },
       { name: "dlx", type: "topic", options: { durable: true } }, // Dead Letter Exchange
     ];
 

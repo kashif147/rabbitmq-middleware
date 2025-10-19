@@ -49,6 +49,7 @@ const EXCHANGES = {
   ACCOUNTS_EVENTS: "accounts.events",
   PORTAL_EVENTS: "portal.events",
   PROFILE_EVENTS: "profile.events",
+  MEMBERSHIP_EVENTS: "membership.events",
   DLX: "dlx",
 };
 
