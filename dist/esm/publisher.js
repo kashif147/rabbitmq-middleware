@@ -30,6 +30,8 @@ class EventPublisher {
       "application.submitted": "application.events",
       "application.approved": "application.events",
       "application.rejected": "application.events",
+      "applications.review.approved.v1": "application.events",
+      "applications.review.rejected.v1": "application.events",
 
       // Portal events
       "portal.application.created": "portal.events",
