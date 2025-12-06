@@ -42,6 +42,11 @@ class EventPublisher {
       "profile.created": "profile.events",
       "profile.updated": "profile.events",
       "profile.deleted": "profile.events",
+
+      // Membership events
+      "members.member.created.requested.v1": "membership.events",
+      "members.subscription.upsert.requested.v1": "membership.events",
+      "members.subscription.current.updated.v1": "membership.events",
     };
   }
 
@@ -64,6 +69,8 @@ class EventPublisher {
       userId,
       metadata = {},
       priority = 0,
+      exchange,
+      routingKey,
     } = options;
 
     // Build standardized payload
@@ -82,8 +89,9 @@ class EventPublisher {
       },
     };
 
-    const exchange = this.getExchangeForEvent(eventType);
-    const routingKey = options.routingKey || eventType;
+    // Use explicit exchange from options, or fallback to mapping, or default
+    const finalExchange = exchange || this.getExchangeForEvent(eventType);
+    const finalRoutingKey = routingKey || eventType;
 
     const messageOptions = {
       contentType: "application/json",
@@ -98,7 +106,7 @@ class EventPublisher {
       },
     };
 
-    return this.publishWithRetry(exchange, routingKey, payload, messageOptions);
+    return this.publishWithRetry(finalExchange, finalRoutingKey, payload, messageOptions);
   }
 
   async publishWithRetry(
