@@ -1,5 +1,5 @@
 {
-  "name": "@membership/rabbitmq-middleware",
+  "name": "@projectShell/rabbitmq-middleware",
   "version": "1.0.0",
   "description": "Shared RabbitMQ middleware for microservices with support for both CommonJS and ESM",
   "main": "dist/index.js",
