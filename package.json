@@ -1,10 +1,9 @@
 {
-  "name": "@projectShell/rabbitmq-middleware",
+  "name": "@membership/rabbitmq-middleware",
   "version": "1.0.0",
   "description": "Shared RabbitMQ middleware for microservices with support for both CommonJS and ESM",
   "main": "dist/index.js",
   "module": "dist/esm/index.js",
-  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "require": "./dist/index.js",
@@ -44,5 +43,11 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/kashif147/rabbitmq-middleware.git"
-  }
+  },
+  "files": [
+    "dist/",
+    "src/",
+    "scripts/",
+    "README.md"
+  ]
 }
