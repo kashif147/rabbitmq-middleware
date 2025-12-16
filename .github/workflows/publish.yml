@@ -3,7 +3,7 @@ name: Publish Package
 on:
   push:
     branches:
-      - main
+      - gateway
 
 jobs:
   publish:
@@ -20,15 +20,9 @@ jobs:
         with:
           node-version: 22
           registry-url: https://npm.pkg.github.com/
-          scope: "@kashif147"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build package
-        run: npm run build
+          scope: "@membership"
 
       - name: Publish to GitHub Packages
-        run: npm publish
+        run: npm publish --access=restricted
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
