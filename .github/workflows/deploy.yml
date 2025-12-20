@@ -23,10 +23,10 @@ jobs:
           -e "ssh -o StrictHostKeyChecking=no" ./ \
           ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:/home/deploy/membership-platform/rabbitmq-middleware/
 
-      - name: Build and restart rabbitmq-middleware
+      - name: Build and restart rabbitmq
         run: |
           ssh -o StrictHostKeyChecking=no ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
             cd /home/deploy/membership-platform/rabbitmq-middleware
-            docker compose build rabbitmq-middleware
-            docker compose up -d rabbitmq-middleware
+            docker compose build rabbitmq
+            docker compose up -d rabbitmq
           EOF
