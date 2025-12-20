@@ -1,0 +1,21 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    env_file:
+      # - /home/deploy/config/.env.common # Common environment variables
+      - .env.staging # Staging environment variables override common variables
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - gateway_app-net
+    restart: always
+volumes:
+  rabbitmq_data:
+
+networks:
+  gateway_app-net:
+    external: true
