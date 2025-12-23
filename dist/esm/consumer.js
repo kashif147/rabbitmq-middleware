@@ -127,11 +127,35 @@ class EventConsumer {
         retryCount,
       });
 
-      // Find and execute handler
-      const handler = this.handlers.get(eventType);
+      // Find and execute handler - try eventType first, then routing key as fallback
+      let handler = this.handlers.get(eventType);
+      const routingKey = msg.fields.routingKey;
+
+      if (!handler && routingKey && routingKey !== eventType) {
+        // Fallback: try routing key if eventType doesn't match
+        handler = this.handlers.get(routingKey);
+        if (handler) {
+          this.logger.info?.(`📌 Handler found by routing key: ${routingKey} (eventType: ${eventType})`);
+        }
+      }
 
       if (!handler) {
-        this.logger.warn?.(`⚠️ No handler registered for event: ${eventType}`);
+        const warnMsg = `⚠️ No handler registered for event: ${eventType}`;
+        const warnData = {
+          eventType,
+          routingKey,
+          registeredHandlers: Array.from(this.handlers.keys()),
+          queueName,
+        };
+        
+        if (this.logger && typeof this.logger.warn === 'function') {
+          this.logger.warn(warnMsg, warnData);
+        } else if (this.logger && typeof this.logger.log === 'function') {
+          this.logger.log(warnMsg, warnData);
+        } else {
+          console.warn(warnMsg, warnData);
+        }
+        
         channel.ack(msg); // Acknowledge to prevent reprocessing
         return;
       }
