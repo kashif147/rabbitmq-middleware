@@ -20,7 +20,13 @@ class ConnectionManager {
 
   async connect(config = {}) {
     // If connection exists, return it (one connection per service instance)
+    // But update connectionName if provided in config
     if (this.connection && this.isConnected()) {
+      const connectionName = config.connectionName || config.serviceName;
+      if (connectionName && connectionName !== this.connectionName) {
+        this.connectionName = connectionName;
+        this.logger.info?.(`📝 Updated connection name: ${connectionName}`);
+      }
       return { connection: this.connection, channel: this.defaultChannel || await this.getChannel() };
     }
 
