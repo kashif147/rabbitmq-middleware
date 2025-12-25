@@ -12,6 +12,12 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - gateway_app-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: always
 volumes:
   rabbitmq_data:
