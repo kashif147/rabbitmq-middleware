@@ -3,13 +3,15 @@ const amqplib = require("amqplib");
 class ConnectionManager {
   constructor() {
     this.connection = null;
-    this.channel = null;
+    this.channels = new Map(); // Map of channel names to channel instances
+    this.defaultChannel = null; // Default channel for backward compatibility
     this.isConnecting = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 5000; // 5 seconds
     this.exchanges = new Map();
     this.logger = console;
+    this.connectionName = null;
   }
 
   setLogger(logger) {
@@ -17,17 +19,18 @@ class ConnectionManager {
   }
 
   async connect(config = {}) {
-    if (this.connection && this.channel) {
-      return { connection: this.connection, channel: this.channel };
+    // If connection exists, return it (one connection per service instance)
+    if (this.connection && this.isConnected()) {
+      return { connection: this.connection, channel: this.defaultChannel || await this.getChannel() };
     }
 
     if (this.isConnecting) {
       // Wait for existing connection attempt
       return new Promise((resolve) => {
         const checkConnection = setInterval(() => {
-          if (!this.isConnecting && this.connection && this.channel) {
+          if (!this.isConnecting && this.connection && this.isConnected()) {
             clearInterval(checkConnection);
-            resolve({ connection: this.connection, channel: this.channel });
+            resolve({ connection: this.connection, channel: this.defaultChannel || this.getChannel() });
           }
         }, 100);
       });
@@ -38,19 +41,31 @@ class ConnectionManager {
     try {
       const url =
         config.url || process.env.RABBIT_URL || "amqp://localhost:5672";
+      const connectionName = config.connectionName || config.serviceName || "unknown-service";
+      this.connectionName = connectionName;
 
       this.logger.info?.(
-        `🔗 Connecting to RabbitMQ: ${url.replace(/\/\/.*@/, "//***@")}`
+        `🔗 Connecting to RabbitMQ: ${url.replace(/\/\/.*@/, "//***@")} (connection: ${connectionName})`
       );
 
-      this.connection = await amqplib.connect(url);
-      this.channel = await this.connection.createChannel();
+      // Connect with client properties for connection name visibility in RabbitMQ management UI
+      const connectionOptions = {
+        clientProperties: {
+          connection_name: connectionName,
+          service: connectionName,
+        },
+      };
 
-      // Set prefetch for better load distribution
-      await this.channel.prefetch(config.prefetch || 10);
+      // Create ONE connection per service instance
+      this.connection = await amqplib.connect(url, connectionOptions);
+      
+      // Create default channel for backward compatibility
+      this.defaultChannel = await this.connection.createChannel();
+      await this.defaultChannel.prefetch(config.prefetch || 10);
+      this.channels.set('default', this.defaultChannel);
 
-      // Setup exchanges
-      await this.setupExchanges(config.exchanges || []);
+      // Setup exchanges on default channel
+      await this.setupExchanges(config.exchanges || [], this.defaultChannel);
 
       // Setup event handlers
       this.setupEventHandlers();
@@ -58,9 +73,11 @@ class ConnectionManager {
       this.reconnectAttempts = 0;
       this.isConnecting = false;
 
-      this.logger.info?.("✅ RabbitMQ connection established successfully");
+      this.logger.info?.(
+        `✅ RabbitMQ connection established successfully (connection: ${connectionName}, channels: 1)`
+      );
 
-      return { connection: this.connection, channel: this.channel };
+      return { connection: this.connection, channel: this.defaultChannel };
     } catch (error) {
       this.isConnecting = false;
       this.logger.error?.(`❌ Failed to connect to RabbitMQ: ${error.message}`);
@@ -83,7 +100,8 @@ class ConnectionManager {
     }
   }
 
-  async setupExchanges(exchangeConfigs) {
+  async setupExchanges(exchangeConfigs, channel = null) {
+    const targetChannel = channel || this.defaultChannel || await this.getChannel();
     const defaultExchanges = [
       { name: "user.events", type: "topic", options: { durable: true } },
       { name: "payment.events", type: "topic", options: { durable: true } },
@@ -98,7 +116,7 @@ class ConnectionManager {
     const exchanges = [...defaultExchanges, ...exchangeConfigs];
 
     for (const exchange of exchanges) {
-      await this.channel.assertExchange(
+      await targetChannel.assertExchange(
         exchange.name,
         exchange.type,
         exchange.options
@@ -118,7 +136,8 @@ class ConnectionManager {
     this.connection.on("close", () => {
       this.logger.warn?.("⚠️ RabbitMQ connection closed");
       this.connection = null;
-      this.channel = null;
+      this.defaultChannel = null;
+      this.channels.clear();
 
       // Auto-reconnect
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -131,31 +150,107 @@ class ConnectionManager {
       }
     });
 
-    // Channel error handler
-    this.channel.on("error", (err) => {
-      this.logger.warn?.(`⚠️ RabbitMQ channel error: ${err.message}`);
-    });
+    // Setup handlers for default channel
+    if (this.defaultChannel) {
+      this.defaultChannel.on("error", (err) => {
+        this.logger.warn?.(`⚠️ RabbitMQ channel error (default): ${err.message}`);
+      });
 
-    // Channel close handler
-    this.channel.on("close", () => {
-      this.logger.warn?.("⚠️ RabbitMQ channel closed");
-      this.channel = null;
-    });
+      this.defaultChannel.on("close", () => {
+        this.logger.warn?.("⚠️ RabbitMQ channel closed: default");
+        this.channels.delete('default');
+        this.defaultChannel = null;
+      });
+    }
   }
 
+  /**
+   * Get the default channel (backward compatibility)
+   * @returns {Promise<Channel>} Default channel
+   */
   async getChannel() {
-    if (!this.channel) {
+    if (!this.connection || !this.defaultChannel) {
       await this.connect();
     }
-    return this.channel;
+    return this.defaultChannel;
+  }
+
+  /**
+   * Get or create a named channel from the same connection
+   * @param {string} channelName - Name of the channel (e.g., 'publisher', 'consumer')
+   * @param {number} prefetch - Prefetch count for the channel
+   * @returns {Promise<Channel>} Named channel
+   */
+  async getNamedChannel(channelName = 'default', prefetch = 10) {
+    if (!this.connection) {
+      await this.connect();
+    }
+
+    // Return existing channel if it exists and is not closed
+    if (this.channels.has(channelName)) {
+      const channel = this.channels.get(channelName);
+      if (channel && !channel.closed) {
+        return channel;
+      }
+      // Channel was closed, remove it
+      this.channels.delete(channelName);
+    }
+
+    // Create new channel from the same connection
+    const channel = await this.connection.createChannel();
+    await channel.prefetch(prefetch);
+    this.channels.set(channelName, channel);
+
+    // Setup event handlers for new channel
+    channel.on("error", (err) => {
+      this.logger.warn?.(`⚠️ RabbitMQ channel error (${channelName}): ${err.message}`);
+    });
+
+    channel.on("close", () => {
+      this.logger.warn?.(`⚠️ RabbitMQ channel closed: ${channelName}`);
+      this.channels.delete(channelName);
+      if (channelName === 'default') {
+        this.defaultChannel = null;
+      }
+    });
+
+    this.logger.info?.(`✅ Created channel: ${channelName} (total channels: ${this.channels.size}, connection: ${this.connectionName})`);
+    return channel;
+  }
+
+  /**
+   * Get all active channels
+   * @returns {Map<string, Channel>} Map of channel names to channels
+   */
+  getChannels() {
+    return this.channels;
+  }
+
+  /**
+   * Get channel count
+   * @returns {number} Number of active channels
+   */
+  getChannelCount() {
+    return this.channels.size;
   }
 
   async close() {
     try {
-      if (this.channel) {
-        await this.channel.close();
-        this.channel = null;
+      // Close all channels first
+      for (const [name, channel] of this.channels) {
+        try {
+          if (channel && !channel.closed) {
+            await channel.close();
+            this.logger.info?.(`✅ Closed channel: ${name}`);
+          }
+        } catch (error) {
+          this.logger.warn?.(`⚠️ Error closing channel ${name}: ${error.message}`);
+        }
       }
+      this.channels.clear();
+      this.defaultChannel = null;
+
+      // Close connection
       if (this.connection) {
         await this.connection.close();
         this.connection = null;
@@ -169,7 +264,7 @@ class ConnectionManager {
   }
 
   isConnected() {
-    return this.connection !== null && this.channel !== null;
+    return this.connection !== null && this.channels.size > 0;
   }
 }
 

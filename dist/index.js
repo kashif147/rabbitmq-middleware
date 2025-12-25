@@ -14,6 +14,8 @@ async function init(config = {}) {
     reconnectDelay = 5000,
     publishRetries = 3,
     consumerMaxRetries = 3,
+    connectionName,
+    serviceName,
   } = config;
 
   // Set logger if provided
@@ -33,8 +35,14 @@ async function init(config = {}) {
   // Configure consumer
   consumer.maxRetries = consumerMaxRetries;
 
-  // Connect to RabbitMQ
-  await connectionManager.connect({ url, exchanges, prefetch });
+  // Connect to RabbitMQ with connection name
+  await connectionManager.connect({ 
+    url, 
+    exchanges, 
+    prefetch,
+    connectionName: connectionName || serviceName,
+    serviceName: serviceName || connectionName,
+  });
 
   return {
     connectionManager,

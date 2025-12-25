@@ -117,7 +117,8 @@ class EventPublisher {
     attempt = 1
   ) {
     try {
-      const channel = await connectionManager.getChannel();
+      // Use dedicated publisher channel from the same connection
+      const channel = await connectionManager.getNamedChannel('publisher', 10);
 
       this.logger.info?.(`📤 Publishing event: ${payload.eventType}`, {
         exchange,

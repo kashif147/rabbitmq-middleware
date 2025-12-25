@@ -22,7 +22,8 @@ class EventConsumer {
       maxLength,
     } = options;
 
-    const channel = await connectionManager.getChannel();
+    // Use consumer channel for queue operations
+    const channel = await connectionManager.getNamedChannel('consumer', 10);
 
     const queueOptions = {
       durable,
@@ -53,7 +54,8 @@ class EventConsumer {
   }
 
   async bindQueue(queueName, exchange, routingKeys = []) {
-    const channel = await connectionManager.getChannel();
+    // Use consumer channel for queue bindings
+    const channel = await connectionManager.getNamedChannel('consumer', 10);
 
     if (!Array.isArray(routingKeys)) {
       routingKeys = [routingKeys];
@@ -79,9 +81,8 @@ class EventConsumer {
   async consume(queueName, options = {}) {
     const { noAck = false, prefetch = 10, consumerTag } = options;
 
-    const channel = await connectionManager.getChannel();
-
-    await channel.prefetch(prefetch);
+    // Use dedicated consumer channel from the same connection
+    const channel = await connectionManager.getNamedChannel('consumer', prefetch);
 
     this.logger.info?.(`🎧 Starting consumer for queue: ${queueName}`);
 
@@ -119,13 +120,24 @@ class EventConsumer {
         retryCount = parseInt(msg.properties.headers["x-retry-count"]);
       }
 
-      this.logger.info?.(`📥 Message received: ${eventType}`, {
-        queueName,
+      // Enhanced message received logging with correlation data
+      const receiveCorrelationData = {
         eventId,
         correlationId,
+        eventType,
+        queueName,
         routingKey: msg.fields.routingKey,
+        exchange: msg.fields.exchange,
         retryCount,
-      });
+        timestamp: new Date().toISOString(),
+        service: payload?.metadata?.service || 'unknown',
+        redelivered: msg.fields.redelivered,
+      };
+
+      this.logger.info?.(`📥 [RECEIVED] Message received: ${eventType}`, receiveCorrelationData);
+      
+      // Parseable format for correlation
+      this.logger.info?.(`📥 [RECEIVED_CORRELATION] eventId=${eventId} correlationId=${correlationId} eventType=${eventType} queue=${queueName} retry=${retryCount} timestamp=${receiveCorrelationData.timestamp}`);
 
       // Find and execute handler - try eventType first, then routing key as fallback
       let handler = this.handlers.get(eventType);
@@ -177,26 +189,81 @@ class EventConsumer {
         queueName,
       });
     } catch (error) {
-      this.logger.error?.(`❌ Error processing message:`, {
-        queueName,
-        eventType: payload?.eventType,
+      // Enhanced error logging with correlation data
+      const errorCorrelationData = {
+        // Core identifiers
         eventId: payload?.eventId,
-        error: error.message,
-        stack: error.stack,
+        correlationId: payload?.correlationId,
+        eventType: payload?.eventType,
+        
+        // Processing context
+        queueName,
+        routingKey: msg?.fields?.routingKey,
+        exchange: msg?.fields?.exchange,
         retryCount,
-      });
+        
+        // Error details
+        error: error.message,
+        errorName: error.name,
+        errorStack: error.stack,
+        
+        // Service metadata
+        service: payload?.metadata?.service || 'unknown',
+        timestamp: new Date().toISOString(),
+        
+        // Message metadata
+        redelivered: msg?.fields?.redelivered,
+        deliveryTag: msg?.fields?.deliveryTag,
+      };
+
+      this.logger.error?.(`❌ [ERROR] Error processing message:`, errorCorrelationData);
+      
+      // Parseable format for correlation
+      this.logger.error?.(`❌ [ERROR_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} retry=${retryCount} error="${error.message}" timestamp=${errorCorrelationData.timestamp}`);
 
       // Handle retry logic
       if (retryCount < this.maxRetries) {
         await this.retryMessage(msg, channel, retryCount + 1);
       } else {
         // Max retries reached, send to DLQ
-        this.logger.error?.(`💀 Max retries reached, sending to DLQ:`, {
-          queueName,
-          eventType: payload?.eventType,
+        const dlqCorrelationData = {
+          // Core identifiers for log correlation
           eventId: payload?.eventId,
+          correlationId: payload?.correlationId,
+          eventType: payload?.eventType,
+          
+          // DLQ metadata
+          dlqQueue: `${queueName}.dlq`,
+          originalQueue: queueName,
+          originalExchange: msg.fields.exchange,
+          originalRoutingKey: msg.fields.routingKey,
+          
+          // Processing metadata
           retryCount,
-        });
+          maxRetries: this.maxRetries,
+          timestamp: new Date().toISOString(),
+          service: payload?.metadata?.service || 'unknown',
+          
+          // Error details
+          error: error.message,
+          errorStack: error.stack,
+          errorName: error.name,
+          
+          // Message metadata
+          messageSize: msg.content.length,
+          redelivered: msg.fields.redelivered,
+          deliveryTag: msg.fields.deliveryTag,
+          
+          // Headers for correlation
+          headers: msg.properties.headers || {},
+        };
+
+        // Structured log for DLQ correlation
+        this.logger.error?.(`💀 [DLQ] Message sent to Dead Letter Queue`, dlqCorrelationData);
+        
+        // Also log in a parseable format for correlation scripts
+        this.logger.error?.(`💀 [DLQ_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} dlq=${dlqCorrelationData.dlqQueue} timestamp=${dlqCorrelationData.timestamp} service=${dlqCorrelationData.service} error="${error.message}"`);
+        
         channel.nack(msg, false, false);
       }
     }
@@ -248,7 +315,8 @@ class EventConsumer {
     }
 
     try {
-      const channel = await connectionManager.getChannel();
+      // Use consumer channel for cancellation
+      const channel = await connectionManager.getNamedChannel('consumer', 10);
       await channel.cancel(consumer.consumerTag);
       this.consumers.delete(queueName);
       this.logger.info?.(`✅ Consumer cancelled: ${queueName}`);
