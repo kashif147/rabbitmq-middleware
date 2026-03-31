@@ -27,7 +27,10 @@ class ConnectionManager {
         this.connectionName = connectionName;
         this.logger.info?.(`📝 Updated connection name: ${connectionName}`);
       }
-      return { connection: this.connection, channel: this.defaultChannel || await this.getChannel() };
+      return {
+        connection: this.connection,
+        channel: this.defaultChannel || (await this.getChannel()),
+      };
     }
 
     if (this.isConnecting) {
@@ -36,7 +39,10 @@ class ConnectionManager {
         const checkConnection = setInterval(() => {
           if (!this.isConnecting && this.connection && this.isConnected()) {
             clearInterval(checkConnection);
-            resolve({ connection: this.connection, channel: this.defaultChannel || this.getChannel() });
+            resolve({
+              connection: this.connection,
+              channel: this.defaultChannel || this.getChannel(),
+            });
           }
         }, 100);
       });
@@ -47,11 +53,15 @@ class ConnectionManager {
     try {
       const url =
         config.url || process.env.RABBIT_URL || "amqp://localhost:5672";
-      const connectionName = config.connectionName || config.serviceName || "unknown-service";
+      const connectionName =
+        config.connectionName || config.serviceName || "unknown-service";
       this.connectionName = connectionName;
 
       this.logger.info?.(
-        `🔗 Connecting to RabbitMQ: ${url.replace(/\/\/.*@/, "//***@")} (connection: ${connectionName})`
+        `🔗 Connecting to RabbitMQ: ${url.replace(
+          /\/\/.*@/,
+          "//***@"
+        )} (connection: ${connectionName})`
       );
 
       // Connect with client properties for connection name visibility in RabbitMQ management UI
@@ -64,11 +74,11 @@ class ConnectionManager {
 
       // Create ONE connection per service instance
       this.connection = await amqplib.connect(url, connectionOptions);
-      
+
       // Create default channel for backward compatibility
       this.defaultChannel = await this.connection.createChannel();
       await this.defaultChannel.prefetch(config.prefetch || 10);
-      this.channels.set('default', this.defaultChannel);
+      this.channels.set("default", this.defaultChannel);
 
       // Setup exchanges on default channel
       await this.setupExchanges(config.exchanges || [], this.defaultChannel);
@@ -107,7 +117,8 @@ class ConnectionManager {
   }
 
   async setupExchanges(exchangeConfigs, channel = null) {
-    const targetChannel = channel || this.defaultChannel || await this.getChannel();
+    const targetChannel =
+      channel || this.defaultChannel || (await this.getChannel());
     const defaultExchanges = [
       { name: "user.events", type: "topic", options: { durable: true } },
       { name: "payment.events", type: "topic", options: { durable: true } },
@@ -160,12 +171,14 @@ class ConnectionManager {
     // Setup handlers for default channel
     if (this.defaultChannel) {
       this.defaultChannel.on("error", (err) => {
-        this.logger.warn?.(`⚠️ RabbitMQ channel error (default): ${err.message}`);
+        this.logger.warn?.(
+          `⚠️ RabbitMQ channel error (default): ${err.message}`
+        );
       });
 
       this.defaultChannel.on("close", () => {
         this.logger.warn?.("⚠️ RabbitMQ channel closed: default");
-        this.channels.delete('default');
+        this.channels.delete("default");
         this.defaultChannel = null;
       });
     }
@@ -188,7 +201,7 @@ class ConnectionManager {
    * @param {number} prefetch - Prefetch count for the channel
    * @returns {Promise<Channel>} Named channel
    */
-  async getNamedChannel(channelName = 'default', prefetch = 10) {
+  async getNamedChannel(channelName = "default", prefetch = 10) {
     if (!this.connection) {
       await this.connect();
     }
@@ -210,18 +223,22 @@ class ConnectionManager {
 
     // Setup event handlers for new channel
     channel.on("error", (err) => {
-      this.logger.warn?.(`⚠️ RabbitMQ channel error (${channelName}): ${err.message}`);
+      this.logger.warn?.(
+        `⚠️ RabbitMQ channel error (${channelName}): ${err.message}`
+      );
     });
 
     channel.on("close", () => {
       this.logger.warn?.(`⚠️ RabbitMQ channel closed: ${channelName}`);
       this.channels.delete(channelName);
-      if (channelName === 'default') {
+      if (channelName === "default") {
         this.defaultChannel = null;
       }
     });
 
-    this.logger.info?.(`✅ Created channel: ${channelName} (total channels: ${this.channels.size}, connection: ${this.connectionName})`);
+    this.logger.info?.(
+      `✅ Created channel: ${channelName} (total channels: ${this.channels.size}, connection: ${this.connectionName})`
+    );
     return channel;
   }
 
@@ -251,7 +268,9 @@ class ConnectionManager {
             this.logger.info?.(`✅ Closed channel: ${name}`);
           }
         } catch (error) {
-          this.logger.warn?.(`⚠️ Error closing channel ${name}: ${error.message}`);
+          this.logger.warn?.(
+            `⚠️ Error closing channel ${name}: ${error.message}`
+          );
         }
       }
       this.channels.clear();

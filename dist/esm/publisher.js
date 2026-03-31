@@ -47,6 +47,10 @@ class EventPublisher {
       "members.member.created.requested.v1": "membership.events",
       "members.subscription.upsert.requested.v1": "membership.events",
       "members.subscription.current.updated.v1": "membership.events",
+      "members.subscription.resigned.v1": "membership.events",
+      "members.subscription.resignation.undone.v1": "membership.events",
+      "members.subscription.cancelled.v1": "membership.events",
+      "members.subscription.cancel.grace.ended.v1": "membership.events",
     };
   }
 
@@ -117,8 +121,28 @@ class EventPublisher {
     attempt = 1
   ) {
     try {
+      // Ensure connection is ready before publishing
+      if (!connectionManager.isConnected()) {
+        // Wait for connection to be established (with timeout)
+        const maxWaitTime = 10000; // 10 seconds
+        const startTime = Date.now();
+        
+        while (!connectionManager.isConnected() && (Date.now() - startTime) < maxWaitTime) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        
+        if (!connectionManager.isConnected()) {
+          throw new Error("RabbitMQ connection not available - connection timeout");
+        }
+      }
+
       // Use dedicated publisher channel from the same connection
       const channel = await connectionManager.getNamedChannel('publisher', 10);
+
+      // Ensure channel is ready
+      if (!channel || channel.closed) {
+        throw new Error("Publisher channel not available or closed");
+      }
 
       this.logger.info?.(`📤 Publishing event: ${payload.eventType}`, {
         exchange,
@@ -157,6 +181,7 @@ class EventPublisher {
           exchange,
           routingKey,
           error: error.message,
+          stack: error.stack,
         }
       );
 

@@ -113,7 +113,9 @@ class EventConsumer {
 
     try {
       payload = JSON.parse(msg.content.toString());
-      const { eventType, eventId, correlationId } = payload;
+      const { eventId, correlationId } = payload;
+      // Prefer payload.eventType; fallback to routing key (some publishers may omit eventType)
+      const eventType = payload.eventType || msg.fields.routingKey;
 
       // Get retry count from headers
       if (msg.properties.headers && msg.properties.headers["x-retry-count"]) {
@@ -155,11 +157,12 @@ class EventConsumer {
         const warnMsg = `⚠️ No handler registered for event: ${eventType}`;
         const warnData = {
           eventType,
+          payloadEventType: payload.eventType,
           routingKey,
           registeredHandlers: Array.from(this.handlers.keys()),
           queueName,
         };
-        
+
         if (this.logger && typeof this.logger.warn === 'function') {
           this.logger.warn(warnMsg, warnData);
         } else if (this.logger && typeof this.logger.log === 'function') {
@@ -167,7 +170,7 @@ class EventConsumer {
         } else {
           console.warn(warnMsg, warnData);
         }
-        
+
         channel.ack(msg); // Acknowledge to prevent reprocessing
         return;
       }
