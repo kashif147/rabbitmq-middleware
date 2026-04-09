@@ -51,6 +51,9 @@ class EventPublisher {
       "members.subscription.resignation.undone.v1": "membership.events",
       "members.subscription.cancelled.v1": "membership.events",
       "members.subscription.cancel.grace.ended.v1": "membership.events",
+      "members.subscription.cancellation.undone.v1": "membership.events",
+      "members.subscription.category.changed.v1": "membership.events",
+      "members.subscription.changed.v1": "membership.events",
     };
   }
 
