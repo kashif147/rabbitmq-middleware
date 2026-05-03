@@ -10,6 +10,7 @@ async function init(config = {}) {
     exchanges = [],
     prefetch = 10,
     logger,
+    structuredLog,
     maxReconnectAttempts = 10,
     reconnectDelay = 5000,
     publishRetries = 3,
@@ -24,6 +25,9 @@ async function init(config = {}) {
     publisher.setLogger(logger);
     consumer.setLogger(logger);
   }
+
+  publisher.setStructuredLog(structuredLog || null);
+  consumer.setStructuredLog(structuredLog || null);
 
   // Configure connection manager
   connectionManager.maxReconnectAttempts = maxReconnectAttempts;

@@ -1,8 +1,46 @@
 import connectionManager from "./connection.js";
+import { v4: uuidv4 } from "uuid";
+
+function extractBusinessIds(envelopeOrData) {
+  const merged = {};
+  if (envelopeOrData && typeof envelopeOrData === "object") {
+    const nested = envelopeOrData.data;
+    if (
+      nested != null &&
+      typeof nested === "object" &&
+      !Array.isArray(nested)
+    ) {
+      Object.assign(merged, nested);
+    }
+    Object.assign(merged, envelopeOrData);
+  }
+  const profileId =
+    merged.profileId ??
+    merged.profile?.id ??
+    merged.profile?._id ??
+    null;
+  const applicationId =
+    merged.applicationId ??
+    merged.application?.id ??
+    merged.application?._id ??
+    null;
+  const membershipId =
+    merged.membershipId ??
+    merged.memberId ??
+    merged.membership?.id ??
+    merged.membershipNumber ??
+    null;
+  return {
+    profileId: profileId != null ? String(profileId) : null,
+    applicationId: applicationId != null ? String(applicationId) : null,
+    membershipId: membershipId != null ? String(membershipId) : null,
+  };
+}
 
 class EventPublisher {
   constructor() {
     this.logger = console;
+    this.structuredLog = null;
     this.publishRetries = 3;
     this.publishRetryDelay = 1000;
 
@@ -61,6 +99,11 @@ class EventPublisher {
     this.logger = logger;
   }
 
+  setStructuredLog(handlers) {
+    this.structuredLog =
+      handlers && typeof handlers === "object" ? handlers : null;
+  }
+
   setExchangeMapping(mapping) {
     this.exchangeMapping = { ...this.exchangeMapping, ...mapping };
   }
@@ -80,17 +123,26 @@ class EventPublisher {
       routingKey,
     } = options;
 
-    // Build standardized payload
+    const occurredAt = new Date().toISOString();
+    const sourceService =
+      metadata.service ||
+      process.env.SERVICE_NAME ||
+      metadata.serviceName ||
+      "unknown";
+
+    // Build standardized payload (timestamp retained for backward compatibility)
     const payload = {
-      eventId: this.generateEventId(),
+      eventId: uuidv4(),
       eventType,
-      timestamp: new Date().toISOString(),
-      correlationId: correlationId || this.generateEventId(),
+      timestamp: occurredAt,
+      occurredAt,
+      correlationId: correlationId || uuidv4(),
       tenantId,
       userId,
+      sourceService,
       data,
       metadata: {
-        service: metadata.service || process.env.SERVICE_NAME || "unknown",
+        service: sourceService,
         version: metadata.version || "1.0",
         ...metadata,
       },
@@ -147,13 +199,15 @@ class EventPublisher {
         throw new Error("Publisher channel not available or closed");
       }
 
-      this.logger.info?.(`📤 Publishing event: ${payload.eventType}`, {
-        exchange,
-        routingKey,
-        eventId: payload.eventId,
-        correlationId: payload.correlationId,
-        attempt,
-      });
+      if (!this.structuredLog?.onPublish) {
+        this.logger.info?.(`📤 Publishing event: ${payload.eventType}`, {
+          exchange,
+          routingKey,
+          eventId: payload.eventId,
+          correlationId: payload.correlationId,
+          attempt,
+        });
+      }
 
       const success = channel.publish(
         exchange,
@@ -163,30 +217,62 @@ class EventPublisher {
       );
 
       if (success) {
-        this.logger.info?.(
-          `✅ Event published successfully: ${payload.eventType}`,
-          {
-            eventId: payload.eventId,
-            exchange,
-            routingKey,
-          }
-        );
+        const ids = extractBusinessIds(data);
+        this.structuredLog?.onPublish?.({
+          eventId: payload.eventId,
+          correlationId: payload.correlationId,
+          exchange,
+          queue: null,
+          routingKey,
+          eventType: payload.eventType,
+          retryCount: attempt - 1,
+          profileId: ids.profileId,
+          applicationId: ids.applicationId,
+          membershipId: ids.membershipId,
+        });
+        if (!this.structuredLog?.onPublish) {
+          this.logger.info?.(
+            `✅ Event published successfully: ${payload.eventType}`,
+            {
+              eventId: payload.eventId,
+              exchange,
+              routingKey,
+            }
+          );
+        }
         return { success: true, eventId: payload.eventId, payload };
       } else {
         throw new Error("Channel publish returned false - buffer full");
       }
     } catch (error) {
-      this.logger.error?.(
-        `❌ Failed to publish event (attempt ${attempt}): ${error.message}`,
-        {
-          eventType: payload.eventType,
-          eventId: payload.eventId,
-          exchange,
-          routingKey,
-          error: error.message,
-          stack: error.stack,
-        }
-      );
+      const ids = extractBusinessIds(payload?.data ?? payload);
+      this.structuredLog?.onFail?.({
+        message: `publish failed: ${error.message}`,
+        eventId: payload?.eventId,
+        correlationId: payload?.correlationId,
+        exchange,
+        queue: null,
+        routingKey,
+        eventType: payload?.eventType,
+        retryCount: attempt - 1,
+        profileId: ids.profileId,
+        applicationId: ids.applicationId,
+        membershipId: ids.membershipId,
+        error: error.message,
+      });
+      if (!this.structuredLog?.onFail) {
+        this.logger.error?.(
+          `❌ Failed to publish event (attempt ${attempt}): ${error.message}`,
+          {
+            eventType: payload.eventType,
+            eventId: payload.eventId,
+            exchange,
+            routingKey,
+            error: error.message,
+            stack: error.stack,
+          }
+        );
+      }
 
       if (attempt < this.publishRetries) {
         await new Promise((resolve) =>
@@ -203,10 +289,6 @@ class EventPublisher {
 
       return { success: false, error: error.message, eventId: payload.eventId };
     }
-  }
-
-  generateEventId() {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
   async publishBatch(events) {

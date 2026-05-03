@@ -1,16 +1,58 @@
 const connectionManager = require("./connection.js");
 
+function extractBusinessIds(payload) {
+  const merged = {};
+  if (payload && typeof payload === "object") {
+    const nested = payload.data;
+    if (
+      nested != null &&
+      typeof nested === "object" &&
+      !Array.isArray(nested)
+    ) {
+      Object.assign(merged, nested);
+    }
+    Object.assign(merged, payload);
+  }
+  const profileId =
+    merged.profileId ??
+    merged.profile?.id ??
+    merged.profile?._id ??
+    null;
+  const applicationId =
+    merged.applicationId ??
+    merged.application?.id ??
+    merged.application?._id ??
+    null;
+  const membershipId =
+    merged.membershipId ??
+    merged.memberId ??
+    merged.membership?.id ??
+    merged.membershipNumber ??
+    null;
+  return {
+    profileId: profileId != null ? String(profileId) : null,
+    applicationId: applicationId != null ? String(applicationId) : null,
+    membershipId: membershipId != null ? String(membershipId) : null,
+  };
+}
+
 class EventConsumer {
   constructor() {
     this.consumers = new Map();
     this.handlers = new Map();
     this.logger = console;
+    this.structuredLog = null;
     this.maxRetries = 3;
     this.retryDelay = 5000;
   }
 
   setLogger(logger) {
     this.logger = logger;
+  }
+
+  setStructuredLog(handlers) {
+    this.structuredLog =
+      handlers && typeof handlers === "object" ? handlers : null;
   }
 
   async createQueue(queueName, options = {}) {
@@ -122,6 +164,20 @@ class EventConsumer {
         retryCount = parseInt(msg.properties.headers["x-retry-count"]);
       }
 
+      const ids = extractBusinessIds(payload);
+      this.structuredLog?.onConsume?.({
+        eventId,
+        correlationId,
+        exchange: msg.fields.exchange,
+        queue: queueName,
+        routingKey: msg.fields.routingKey,
+        eventType,
+        retryCount,
+        profileId: ids.profileId,
+        applicationId: ids.applicationId,
+        membershipId: ids.membershipId,
+      });
+
       // Enhanced message received logging with correlation data
       const receiveCorrelationData = {
         eventId,
@@ -136,10 +192,12 @@ class EventConsumer {
         redelivered: msg.fields.redelivered,
       };
 
-      this.logger.info?.(`📥 [RECEIVED] Message received: ${eventType}`, receiveCorrelationData);
-      
-      // Parseable format for correlation
-      this.logger.info?.(`📥 [RECEIVED_CORRELATION] eventId=${eventId} correlationId=${correlationId} eventType=${eventType} queue=${queueName} retry=${retryCount} timestamp=${receiveCorrelationData.timestamp}`);
+      if (!this.structuredLog?.onConsume) {
+        this.logger.info?.(`📥 [RECEIVED] Message received: ${eventType}`, receiveCorrelationData);
+
+        // Parseable format for correlation
+        this.logger.info?.(`📥 [RECEIVED_CORRELATION] eventId=${eventId} correlationId=${correlationId} eventType=${eventType} queue=${queueName} retry=${retryCount} timestamp=${receiveCorrelationData.timestamp}`);
+      }
 
       // Find and execute handler - try eventType first, then routing key as fallback
       let handler = this.handlers.get(eventType);
@@ -187,10 +245,12 @@ class EventConsumer {
       // Acknowledge successful processing
       channel.ack(msg);
 
-      this.logger.info?.(`✅ Message processed successfully: ${eventType}`, {
-        eventId,
-        queueName,
-      });
+      if (!this.structuredLog?.onConsume) {
+        this.logger.info?.(`✅ Message processed successfully: ${eventType}`, {
+          eventId,
+          queueName,
+        });
+      }
     } catch (error) {
       // Enhanced error logging with correlation data
       const errorCorrelationData = {
@@ -219,10 +279,27 @@ class EventConsumer {
         deliveryTag: msg?.fields?.deliveryTag,
       };
 
-      this.logger.error?.(`❌ [ERROR] Error processing message:`, errorCorrelationData);
-      
-      // Parseable format for correlation
-      this.logger.error?.(`❌ [ERROR_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} retry=${retryCount} error="${error.message}" timestamp=${errorCorrelationData.timestamp}`);
+        const failIds = extractBusinessIds(payload);
+        this.structuredLog?.onFail?.({
+          message: error.message,
+          eventId: payload?.eventId,
+          correlationId: payload?.correlationId,
+          exchange: msg?.fields?.exchange,
+          queue: queueName,
+          routingKey: msg?.fields?.routingKey,
+          eventType: payload?.eventType,
+          retryCount,
+          profileId: failIds.profileId,
+          applicationId: failIds.applicationId,
+          membershipId: failIds.membershipId,
+          error: error.message,
+        });
+      if (!this.structuredLog?.onFail) {
+        this.logger.error?.(`❌ [ERROR] Error processing message:`, errorCorrelationData);
+
+        // Parseable format for correlation
+        this.logger.error?.(`❌ [ERROR_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} retry=${retryCount} error="${error.message}" timestamp=${errorCorrelationData.timestamp}`);
+      }
 
       // Handle retry logic
       if (retryCount < this.maxRetries) {
@@ -261,12 +338,29 @@ class EventConsumer {
           headers: msg.properties.headers || {},
         };
 
-        // Structured log for DLQ correlation
-        this.logger.error?.(`💀 [DLQ] Message sent to Dead Letter Queue`, dlqCorrelationData);
-        
-        // Also log in a parseable format for correlation scripts
-        this.logger.error?.(`💀 [DLQ_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} dlq=${dlqCorrelationData.dlqQueue} timestamp=${dlqCorrelationData.timestamp} service=${dlqCorrelationData.service} error="${error.message}"`);
-        
+        const dlqIds = extractBusinessIds(payload);
+        this.structuredLog?.onDlq?.({
+          message: `moved to DLQ: ${error.message}`,
+          eventId: payload?.eventId,
+          correlationId: payload?.correlationId,
+          exchange: msg.fields.exchange,
+          queue: queueName,
+          routingKey: msg.fields.routingKey,
+          eventType: payload?.eventType,
+          retryCount,
+          profileId: dlqIds.profileId,
+          applicationId: dlqIds.applicationId,
+          membershipId: dlqIds.membershipId,
+          dlqQueue: dlqCorrelationData.dlqQueue,
+        });
+        if (!this.structuredLog?.onDlq) {
+          // Structured log for DLQ correlation
+          this.logger.error?.(`💀 [DLQ] Message sent to Dead Letter Queue`, dlqCorrelationData);
+
+          // Also log in a parseable format for correlation scripts
+          this.logger.error?.(`💀 [DLQ_CORRELATION] eventId=${payload?.eventId} correlationId=${payload?.correlationId} queue=${queueName} dlq=${dlqCorrelationData.dlqQueue} timestamp=${dlqCorrelationData.timestamp} service=${dlqCorrelationData.service} error="${error.message}"`);
+        }
+
         channel.nack(msg, false, false);
       }
     }
