@@ -92,6 +92,7 @@ class EventPublisher {
       "members.subscription.cancellation.undone.v1": "membership.events",
       "members.subscription.category.changed.v1": "membership.events",
       "members.subscription.changed.v1": "membership.events",
+      "members.member.notification.requested.v1": "membership.events",
     };
   }
 
