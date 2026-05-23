@@ -61,6 +61,7 @@ class EventPublisher {
       "account.updated": "accounts.events",
       "application.status.updated": "accounts.events",
       "application.status.submitted": "accounts.events",
+      "journal.created.v1": "journal.events",
 
       // Application events
       "application.created": "application.events",
