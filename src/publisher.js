@@ -95,6 +95,9 @@ class EventPublisher {
       "members.subscription.changed.v1": "membership.events",
       "members.member.notification.requested.v1": "membership.events",
       "members.payment-form.approved.v1": "membership.events",
+      "members.payment.receipt.posted.v1": "membership.events",
+      "members.reminder.batch.comms.requested.v1": "membership.events",
+      "directdebit.collection.unpaid.v1": "application.events",
     };
   }
 
