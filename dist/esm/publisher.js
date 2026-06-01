@@ -86,6 +86,7 @@ class EventPublisher {
       "members.member.created.requested.v1": "membership.events",
       "members.subscription.upsert.requested.v1": "membership.events",
       "members.subscription.current.updated.v1": "membership.events",
+      "members.subscription.reporting.snapshot.v1": "membership.events",
       "members.subscription.resigned.v1": "membership.events",
       "members.subscription.resignation.undone.v1": "membership.events",
       "members.subscription.cancelled.v1": "membership.events",
