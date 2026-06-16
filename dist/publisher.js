@@ -67,9 +67,9 @@ class EventPublisher {
       "application.created": "application.events",
       "application.updated": "application.events",
       "application.submitted": "application.events",
-      "application.approved": "application.events",
+      "application.processed": "application.events",
       "application.rejected": "application.events",
-      "applications.review.approved.v1": "application.events",
+      "applications.review.processed.v1": "application.events",
       "applications.review.rejected.v1": "application.events",
 
       // Portal events
@@ -81,6 +81,8 @@ class EventPublisher {
       "profile.created": "profile.events",
       "profile.updated": "profile.events",
       "profile.deleted": "profile.events",
+      "profile.duplicate.detection.run": "profile.events",
+      "profile.duplicate.merged": "profile.events",
 
       // Membership events
       "members.member.created.requested.v1": "membership.events",

@@ -40,7 +40,7 @@ async function publisherExample() {
       EVENT_TYPES.APPLICATION_STATUS_UPDATED,
       {
         applicationId: "app-456",
-        status: "approved",
+        status: "processed",
         previousStatus: "pending",
         approvedBy: "admin-789",
       },

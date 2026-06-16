@@ -22,9 +22,9 @@ const EVENT_TYPES = {
   APPLICATION_CREATED: "application.created",
   APPLICATION_UPDATED: "application.updated",
   APPLICATION_SUBMITTED: "application.submitted",
-  APPLICATION_APPROVED: "application.approved",
+  APPLICATION_PROCESSED: "application.processed",
   APPLICATION_REJECTED: "application.rejected",
-  APPLICATION_REVIEW_APPROVED: "applications.review.approved.v1",
+  APPLICATION_REVIEW_PROCESSED: "applications.review.processed.v1",
   APPLICATION_REVIEW_REJECTED: "applications.review.rejected.v1",
 
   // Portal events
@@ -96,7 +96,7 @@ const EVENT_SCHEMAS = {
     required: ["paymentId", "amount", "currency", "status"],
     optional: ["userId", "applicationId", "tenantId", "transactionId"],
   },
-  [EVENT_TYPES.APPLICATION_REVIEW_APPROVED]: {
+  [EVENT_TYPES.APPLICATION_REVIEW_PROCESSED]: {
     required: ["applicationId", "tenantId", "reviewerId"],
     optional: [
       "effectiveHash",

@@ -42,7 +42,7 @@ class UserService {
     // Bind to relevant events
     await consumer.bindQueue(queueName, "application.events", [
       EVENT_TYPES.APPLICATION_CREATED,
-      EVENT_TYPES.APPLICATION_APPROVED,
+      EVENT_TYPES.APPLICATION_PROCESSED,
     ]);
 
     // Register handlers
@@ -52,8 +52,8 @@ class UserService {
     );
 
     consumer.registerHandler(
-      EVENT_TYPES.APPLICATION_APPROVED,
-      this.handleApplicationApproved.bind(this)
+      EVENT_TYPES.APPLICATION_PROCESSED,
+      this.handleApplicationProcessed.bind(this)
     );
 
     // Start consuming
@@ -75,16 +75,16 @@ class UserService {
     console.log("✅ Application created handler completed");
   }
 
-  async handleApplicationApproved(payload, context) {
-    console.log("📥 Application approved:", {
+  async handleApplicationProcessed(payload, context) {
+    console.log("📥 Application processed:", {
       applicationId: payload.data.applicationId,
       eventId: payload.eventId,
     });
 
     // Business logic here
-    await this.notifyUserOfApproval(payload.data);
+    await this.notifyUserOfProcessing(payload.data);
 
-    console.log("✅ Application approved handler completed");
+    console.log("✅ Application processed handler completed");
   }
 
   async processNewApplication(data) {
@@ -93,7 +93,7 @@ class UserService {
     console.log("  ✓ Application processed");
   }
 
-  async notifyUserOfApproval(data) {
+  async notifyUserOfProcessing(data) {
     // Simulate notification
     await new Promise((resolve) => setTimeout(resolve, 100));
     console.log("  ✓ User notified");
