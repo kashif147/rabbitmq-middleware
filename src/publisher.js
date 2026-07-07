@@ -227,7 +227,7 @@ class EventPublisher {
       );
 
       if (success) {
-        const ids = extractBusinessIds(data);
+        const ids = extractBusinessIds(payload);
         this.structuredLog?.onPublish?.({
           eventId: payload.eventId,
           correlationId: payload.correlationId,

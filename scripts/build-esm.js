@@ -19,6 +19,13 @@ function convertToESM(content) {
       if (modulePath.startsWith(".") && !modulePath.endsWith(".js")) {
         modulePath += ".js";
       }
+      if (varName.startsWith("{")) {
+        const namedImports = varName.replace(
+          /(\w+)\s*:\s*(\w+)/g,
+          "$1 as $2"
+        );
+        return `import ${namedImports} from "${modulePath}";`;
+      }
       return `import ${varName} from "${modulePath}";`;
     }
   );
