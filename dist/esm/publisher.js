@@ -102,6 +102,17 @@ class EventPublisher {
       "members.reminder.batch.comms.requested.v1": "membership.events",
       "members.undergraduate.graduation.comms.requested.v1": "membership.events",
       "directdebit.collection.unpaid.v1": "application.events",
+
+      // Issue Management events
+      "issues.issue.created.v1": "issues.events",
+      "issues.issue.updated.v1": "issues.events",
+      "issues.issue.status.changed.v1": "issues.events",
+      "issues.activity.logged.v1": "issues.events",
+      "issues.ir.referred.v1": "issues.events",
+      "issues.ir.outcome.received.v1": "issues.events",
+      "issues.duedate.approaching.v1": "issues.events",
+      "issues.issue.audit.v1": "issues.events",
+      "issues.issue.reporting.snapshot.v1": "issues.events",
     };
   }
 
