@@ -102,6 +102,17 @@ class EventPublisher {
       "members.reminder.batch.comms.requested.v1": "membership.events",
       "members.undergraduate.graduation.comms.requested.v1": "membership.events",
       "directdebit.collection.unpaid.v1": "application.events",
+      // Mapped to the exchange its publisher already names explicitly - no routing change.
+      "members.gap-letter.requested.v1": "membership.events",
+
+      // Deferred application payment links (account-service docs/design/IMPLEMENTATION_PLAN.md s.3)
+      "applications.payment-link.requested.v1": "application.events",
+      "applications.payment-link.email.requested.v1": "application.events",
+      "payments.payment-link.issued.v1": "payment.events",
+      "payments.payment-link.failed.v1": "payment.events",
+      "payments.payment-link.expired.v1": "payment.events",
+      "payments.application-payment.status-changed.v1": "payment.events",
+      "payments.application-payment.authorisation-expiring.v1": "payment.events",
 
       // Issue Management events
       "issues.issue.created.v1": "issues.events",
