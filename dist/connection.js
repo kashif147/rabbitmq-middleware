@@ -5,6 +5,9 @@ class ConnectionManager {
     this.connection = null;
     this.channels = new Map(); // Map of channel names to channel instances
     this.defaultChannel = null; // Default channel for backward compatibility
+    // M1: a separate CONFIRM channel (broker ack per message), opened lazily on the same connection and used
+    // only by publisher.publishConfirmed(). The regular / named channels and publish() are unchanged.
+    this.confirmChannel = null;
     this.isConnecting = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
@@ -129,6 +132,7 @@ class ConnectionManager {
       { name: "membership.events", type: "topic", options: { durable: true } },
       { name: "product.events", type: "topic", options: { durable: true } },
       { name: "journal.events", type: "topic", options: { durable: true } },
+      { name: "provisioning.events", type: "topic", options: { durable: true } }, // M1: tenant.provisioning.*
       { name: "dlx", type: "topic", options: { durable: true } }, // Dead Letter Exchange
     ];
 
@@ -157,6 +161,7 @@ class ConnectionManager {
       this.connection = null;
       this.defaultChannel = null;
       this.channels.clear();
+      this.confirmChannel = null;
 
       // Auto-reconnect
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -194,6 +199,19 @@ class ConnectionManager {
       await this.connect();
     }
     return this.defaultChannel;
+  }
+
+  /** M1: the confirm channel (publisher confirms). Recreated after a close. */
+  async getConfirmChannel() {
+    if (this.confirmChannel) return this.confirmChannel;
+    if (!this.connection) await this.connect();
+    const ch = await this.connection.createConfirmChannel();
+    ch.on("error", (err) => this.logger.warn?.(`⚠️ RabbitMQ confirm channel error: ${err.message}`));
+    ch.on("close", () => {
+      if (this.confirmChannel === ch) this.confirmChannel = null;
+    });
+    this.confirmChannel = ch;
+    return ch;
   }
 
   /**
@@ -261,6 +279,10 @@ class ConnectionManager {
 
   async close() {
     try {
+      if (this.confirmChannel) {
+        await this.confirmChannel.close();
+        this.confirmChannel = null;
+      }
       // Close all channels first
       for (const [name, channel] of this.channels) {
         try {
