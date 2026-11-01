@@ -47,6 +47,12 @@ class EventPublisher {
       "members.member.created.requested.v1": "membership.events",
       "members.subscription.upsert.requested.v1": "membership.events",
       "members.subscription.current.updated.v1": "membership.events",
+
+      // M1: tenant provisioning (user-service orchestrator <-> owning services). Published only through
+      // publishConfirmed() from a transactional outbox (deterministic eventId, broker ack).
+      "tenant.provisioning.step.requested.v1": "provisioning.events",
+      "tenant.provisioning.step.completed.v1": "provisioning.events",
+      "tenant.provisioning.step.failed.v1": "provisioning.events",
     };
   }
 
@@ -174,6 +180,72 @@ class EventPublisher {
 
       return { success: false, error: error.message, eventId: payload.eventId };
     }
+  }
+
+  /**
+   * M1: publish ONE message and resolve only when the broker CONFIRMS it (publisher confirms on a dedicated
+   * confirm channel). For transactional outboxes:
+   *  - options.eventId is REQUIRED and used as-is (deterministic: the same logical event always carries the same
+   *    id, so a re-publish after a crash is deduplicated by consumers); it is also the AMQP messageId;
+   *  - options.tenantId is REQUIRED (internal tenant id): envelope tenantId + x-tenant-id header;
+   *  - no internal retry loop (the outbox owns retry / backoff); options.confirmTimeoutMs (default 10000);
+   *  - resolves { success: true, eventId } on ack, { success: false, error, eventId } on nack / timeout /
+   *    channel error. Never throws for a broker failure.
+   * publish() is unchanged (it does not wait for a broker ack).
+   */
+  async publishConfirmed(eventType, data, options = {}) {
+    const { eventId, tenantId, correlationId, metadata = {}, exchange, routingKey, confirmTimeoutMs = 10000 } = options;
+    if (typeof eventId !== "string" || !/^[A-Za-z0-9._:-]{8,128}$/.test(eventId)) {
+      return { success: false, error: "eventId required (8-128 chars [A-Za-z0-9._:-])", eventId };
+    }
+    if (typeof tenantId !== "string" || !/^[0-9a-f]{24}$/.test(tenantId)) {
+      return { success: false, error: "tenantId (internal tenant id) required", eventId };
+    }
+    const payload = {
+      eventId,
+      eventType,
+      timestamp: new Date().toISOString(),
+      correlationId: correlationId || eventId,
+      tenantId,
+      data,
+      metadata: {
+        service: metadata.service || process.env.SERVICE_NAME || "unknown",
+        version: metadata.version || "1.0",
+        ...metadata,
+      },
+    };
+    const finalExchange = exchange || this.getExchangeForEvent(eventType);
+    const finalRoutingKey = routingKey || eventType;
+    const messageOptions = {
+      contentType: "application/json",
+      persistent: true,
+      messageId: eventId,
+      timestamp: Date.now(),
+      headers: { "x-event-type": eventType, "x-correlation-id": payload.correlationId, "x-tenant-id": tenantId },
+    };
+    let channel;
+    try {
+      channel = await connectionManager.getConfirmChannel();
+    } catch (error) {
+      return { success: false, error: `confirm channel unavailable: ${error.message}`, eventId };
+    }
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (r) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(r);
+      };
+      const timer = setTimeout(() => finish({ success: false, error: "confirm timeout", eventId }), confirmTimeoutMs);
+      try {
+        channel.publish(finalExchange, finalRoutingKey, Buffer.from(JSON.stringify(payload)), messageOptions, (err) =>
+          finish(err ? { success: false, error: "broker nack", eventId } : { success: true, eventId, exchange: finalExchange, routingKey: finalRoutingKey })
+        );
+      } catch (error) {
+        finish({ success: false, error: error.message, eventId });
+      }
+    });
   }
 
   generateEventId() {
