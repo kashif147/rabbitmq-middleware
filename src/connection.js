@@ -4,6 +4,9 @@ class ConnectionManager {
   constructor() {
     this.connection = null;
     this.channel = null;
+    // M1: a separate CONFIRM channel (broker ack per message), opened lazily on the same connection and used
+    // only by publisher.publishConfirmed(). The regular channel and publish() are unchanged.
+    this.confirmChannel = null;
     this.isConnecting = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
@@ -92,6 +95,7 @@ class ConnectionManager {
       { name: "portal.events", type: "topic", options: { durable: true } },
       { name: "profile.events", type: "topic", options: { durable: true } },
       { name: "membership.events", type: "topic", options: { durable: true } },
+      { name: "provisioning.events", type: "topic", options: { durable: true } }, // M1: tenant.provisioning.*
       { name: "dlx", type: "topic", options: { durable: true } }, // Dead Letter Exchange
     ];
 
@@ -119,6 +123,7 @@ class ConnectionManager {
       this.logger.warn?.("⚠️ RabbitMQ connection closed");
       this.connection = null;
       this.channel = null;
+      this.confirmChannel = null;
 
       // Auto-reconnect
       if (this.reconnectAttempts < this.maxReconnectAttempts) {
@@ -150,8 +155,25 @@ class ConnectionManager {
     return this.channel;
   }
 
+  /** M1: the confirm channel (publisher confirms). Recreated after a close. */
+  async getConfirmChannel() {
+    if (this.confirmChannel) return this.confirmChannel;
+    if (!this.connection) await this.connect();
+    const ch = await this.connection.createConfirmChannel();
+    ch.on("error", (err) => this.logger.warn?.(`⚠️ RabbitMQ confirm channel error: ${err.message}`));
+    ch.on("close", () => {
+      if (this.confirmChannel === ch) this.confirmChannel = null;
+    });
+    this.confirmChannel = ch;
+    return ch;
+  }
+
   async close() {
     try {
+      if (this.confirmChannel) {
+        await this.confirmChannel.close();
+        this.confirmChannel = null;
+      }
       if (this.channel) {
         await this.channel.close();
         this.channel = null;
